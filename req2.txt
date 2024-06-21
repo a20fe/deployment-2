@@ -1,0 +1,10 @@
+pandas==2.2.2
+spacy==3.7.5
+fastapi==0.111.0
+pydantic==2.7.3
+uvicorn==0.30.1
+scikit-learn==1.5.0
+scipy==1.13.1
+pymongo==4.7.3
+numpy==1.26.4
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz#egg=en_core_web_sm
