@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 app.secret_key = 'PASS@152bn'
+
 nlp = spacy.load("en_core_web_sm")
 label_encoder = LabelEncoder()
 v = TfidfVectorizer()
@@ -76,7 +77,7 @@ def preprocess(text):
 
 # Define Pydantic model for input validation
 class MentorRequest(BaseModel):
-    _id: str
+     mentor_id: str
 
 def get_sorted_neighbor_indexes(distances, indices):
     flattened_distances = distances.flatten()
@@ -99,7 +100,7 @@ def replace_nan_with_none(selected_rows_dict):
 
 # Route to recommend
 @app.post("/recommend")
-async def predict(mentor_request: MentorRequest):
+async def suggest(mentor_request: MentorRequest):
     
     # Receive new data
     backup_data = fetch_and_backup_data()
@@ -133,8 +134,8 @@ async def predict(mentor_request: MentorRequest):
         vectorized_data = v.fit_transform(data_df['preprocessed_data'])
         tfidf_df = pd.DataFrame(vectorized_data.toarray(), columns=v.get_feature_names_out())
         tfidf_df.fillna(0, inplace=True)
-        df_processed = pd.concat([data_df[['levelOfExperience', 'userName']], tfidf_df], axis=1)
-        df_processed.set_index('userName', inplace=True)
+        df_processed = pd.concat([data_df[['levelOfExperience', '_id']], tfidf_df], axis=1)
+        df_processed.set_index('_id', inplace=True)
     except KeyError as e:
         raise HTTPException(status_code=500, detail=f"Error processing data: {e}")
     
@@ -142,15 +143,18 @@ async def predict(mentor_request: MentorRequest):
     # Fitting data into model
     df_processed_matrix = csr_matrix(df_processed.values)
     model.fit(df_processed_matrix)
+    
+    mentor_id = mentor_request.mentor_id
 
-    mentor_id = mentor_request._id
-    mentor_data = df_processed[df_processed['_id'] == mentor_id]
+    try:
+        mentor_data = df_processed.loc[mentor_id]
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Mentor with ID {mentor_id} not found")
 
     data_point_matrix = csr_matrix(mentor_data.values.reshape(1, -1))
 
     distances, indices = model.kneighbors(data_point_matrix, n_neighbors=4)
 
-    distances, indices = model.kneighbors(data_point_matrix, n_neighbors=4)
     sorted_indexes = get_sorted_neighbor_indexes(distances, indices)
 
     selected_rows = backup_data.iloc[sorted_indexes]
@@ -159,7 +163,6 @@ async def predict(mentor_request: MentorRequest):
     selected_rows_dict = replace_nan_with_none(selected_rows_dict)
 
     return {"recommended mentors ": selected_rows_dict}
-
-
+    
 if __name__ == "__main__":
     uvicorn.run(app, host='localhost', port=8000)
